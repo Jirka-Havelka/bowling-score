@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#c2410c">
+<title>Bowlingový zapisovač</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700&family=IBM+Plex+Sans:wght@400;600&display=swap">
+<style>
+*,*::before,*::after{box-sizing:border-box}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0;font-size:14px}
+[hidden]{display:none!important}
+
+/* Layout: score sheet nahoře (scroll), pevná klávesnice dole jako ovladač u dráhy */
+:root{
+  --bg:#f3f1ee; --surface:#ffffff; --fg:#1d1b19; --muted:#7a736b; --line:#d9d3cb;
+  --accent:#c2410c; --accent-fg:#ffffff; --active:#fff3ea; --key:#e9e5df;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#141312; --surface:#1e1c1a; --fg:#f1ede8; --muted:#9a928a; --line:#3a3633;
+  --accent:#f97316; --accent-fg:#1a0d04; --active:#2a1f17; --key:#2b2825; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141312; --surface:#1e1c1a; --fg:#f1ede8; --muted:#9a928a; --line:#3a3633;
+  --accent:#f97316; --accent-fg:#1a0d04; --active:#2a1f17; --key:#2b2825; color-scheme:dark}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);display:flex;flex-direction:column}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:12px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1{font-family:var(--display);font-weight:700;font-size:26px;margin:0;letter-spacing:.02em;text-transform:uppercase}
+.hbtns{display:flex;gap:8px}
+button{font-family:inherit;cursor:pointer;border:0;border-radius:8px;color:var(--fg);background:var(--key)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.small{font-size:13px;padding:8px 12px;font-weight:600}
+main{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding-block:4px 16px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.player{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px}
+.player.on{background:var(--active);border-color:var(--accent)}
+.prow{display:flex;align-items:center;gap:8px}
+.pname::placeholder{color:var(--accent);opacity:.8}
+.pname{flex:1;min-width:0;font:600 16px var(--body);background:transparent;border:0;color:var(--fg);padding:4px 0}
+.total{font-family:var(--display);font-weight:700;font-size:28px;font-variant-numeric:tabular-nums;min-width:48px;text-align:right}
+.del{background:transparent;color:var(--muted);font-size:18px;padding:2px 8px}
+.sheet{overflow-x:auto}
+.frames{display:grid;grid-template-columns:repeat(9,minmax(30px,1fr)) minmax(44px,1.4fr);border:1px solid var(--line);border-radius:6px;min-width:330px}
+.f{border-left:1px solid var(--line);display:flex;flex-direction:column}
+.f:first-child{border-left:0}
+.f.cur{box-shadow:inset 0 -3px 0 var(--accent)}
+.fn{font-size:10px;color:var(--muted);text-align:center;padding-top:2px}
+.rolls{display:flex;justify-content:flex-end;height:20px}
+.r{width:15px;font:700 13px var(--display);display:flex;align-items:center;justify-content:center;border-left:1px solid var(--line);border-bottom:1px solid var(--line)}
+.f:last-child .r{width:33.3%}
+.r.x{color:var(--accent)}
+.cum{font:700 17px var(--display);text-align:center;height:24px;line-height:24px;font-variant-numeric:tabular-nums}
+.add{background:transparent;border:1px dashed var(--line);color:var(--muted);padding:12px;font-weight:600}
+.done{text-align:center;color:var(--muted);font-size:14px;padding:8px}
+.pad{background:var(--surface);border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px;
+  padding-block:10px calc(10px + env(safe-area-inset-bottom,0px));
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.who{font-size:13px;color:var(--muted)}
+.who b{color:var(--fg)}
+.keys{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+.k{font:700 24px var(--display);height:52px;font-variant-numeric:tabular-nums}
+.k:disabled{opacity:.25;cursor:default}
+.k.hot{background:var(--accent);color:var(--accent-fg)}
+.k.undo{font:600 14px var(--body)}
+.ov{position:fixed;inset:0;z-index:10;background:var(--bg);overflow-y:auto;display:flex;flex-direction:column;align-items:center;gap:20px;
+  padding-block:calc(20px + env(safe-area-inset-top,0px)) calc(24px + env(safe-area-inset-bottom,0px));
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.ov h2{font:700 34px var(--display);text-transform:uppercase;letter-spacing:.04em;margin:0;text-wrap:balance;text-align:center}
+.ov .sub{color:var(--muted);font-size:13px;margin-top:-14px}
+.podium{display:grid;grid-template-columns:1fr 1fr 1fr;align-items:end;gap:8px;width:100%;max-width:420px}
+.pc{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0}
+.pc .n{font:600 15px var(--body);text-align:center;overflow-wrap:anywhere}
+.pc .s{font:700 30px var(--display);font-variant-numeric:tabular-nums;line-height:1}
+.blk{width:100%;border-radius:8px 8px 0 0;display:flex;justify-content:center;padding-top:8px;font:700 40px var(--display);color:var(--accent-fg)}
+.p1 .blk{height:130px;background:var(--accent)}
+.p2 .blk{height:95px;background:var(--fg);color:var(--bg);opacity:.85}
+.p3 .blk{height:70px;background:var(--muted);color:var(--bg)}
+.p1 .s{font-size:40px;color:var(--accent)}
+.rest{width:100%;max-width:420px;display:flex;flex-direction:column;border-top:1px solid var(--line)}
+.rr{display:grid;grid-template-columns:32px 1fr auto auto;gap:10px;align-items:center;padding:10px 4px;border-bottom:1px solid var(--line)}
+.rr .pos{font:700 20px var(--display);color:var(--muted)}
+.rr .nm{min-width:0;overflow-wrap:anywhere;font-weight:600}
+.rr .xs{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.rr .sc{font:700 24px var(--display);font-variant-numeric:tabular-nums;min-width:44px;text-align:right}
+.ovb{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.confirm{display:flex;gap:8px;align-items:center;font-size:13px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Bowling</h1>
+  <div class="hbtns">
+    <button class="small" id="rankBtn" style="background:var(--accent);color:var(--accent-fg)">Pořadí</button>
+    <button class="small" id="newBtn">Nová hra</button>
+  </div>
+</header>
+<div class="confirm" id="confirmBar" hidden style="padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 8px">
+  <span style="flex:1">Smazat skóre a začít znovu? Hráči zůstanou.</span>
+  <button class="small" id="noBtn">Ne</button>
+  <button class="small" id="yesBtn" style="background:var(--accent);color:var(--accent-fg)">Ano</button>
+</div>
+<main id="list"></main>
+<div class="ov" id="ov" hidden></div>
+<div class="pad">
+  <div class="who" id="who"></div>
+  <div class="keys" id="keys"></div>
+</div>
+
+<script>
+const KEY='bowling-v2';
+let st={players:Array(9).fill('').map(n=>({name:n,rolls:[]})),history:[]};
+const nm=(p,i)=>p.name||('Hráč '+(i+1));
+try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.players&&s.players.length)st={players:s.players,history:s.history||[]}}catch(e){}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(st))}catch(e){}}
+
+// rolls -> frames [[...],...]
+function frames(rolls){
+  const fr=[];let i=0;
+  for(let f=0;f<10&&i<rolls.length;f++){
+    if(f<9){
+      if(rolls[i]===10){fr.push([10]);i++}
+      else{fr.push(rolls.slice(i,i+2));i+=2}
+    }else fr.push(rolls.slice(i,i+3));
+  }
+  return fr;
+}
+function frameDone(fr,f){
+  const r=fr[f];if(!r)return false;
+  if(f<9)return r[0]===10||r.length===2;
+  if(r.length===3)return true;
+  return r.length===2&&r[0]+r[1]<10;
+}
+function doneCount(rolls){const fr=frames(rolls);let n=0;for(let f=0;f<10;f++)if(frameDone(fr,f))n++;return n}
+function maxPins(rolls){
+  const fr=frames(rolls);const n=doneCount(rolls);if(n>=10)return -1;
+  const r=fr[n]||[];
+  if(r.length===0)return 10;
+  if(n<9)return 10-r[0];
+  if(r.length===1)return r[0]===10?10:10-r[0];
+  // 10. frame, 2 hody
+  if(r[0]===10)return r[1]===10?10:10-r[1];
+  return 10;
+}
+function scores(rolls){
+  const out=[];let i=0,tot=0;
+  for(let f=0;f<10;f++){
+    if(i>=rolls.length)break;
+    const a=rolls[i],b=rolls[i+1],c=rolls[i+2];
+    if(a===10){ if(c===undefined)break; tot+=10+b+c; i+=1 }
+    else{ if(b===undefined)break;
+      if(a+b===10){ if(c===undefined)break; tot+=10+c } else tot+=a+b;
+      i+=2 }
+    out.push(tot);
+  }
+  return out;
+}
+function marks(fr,f){
+  const r=fr[f]||[];
+  if(f<9){
+    if(r[0]===10)return['','X'];
+    return[sym(r[0]),r.length===2&&r[0]+r[1]===10?'/':sym(r[1])];
+  }
+  const[a,b,c]=r;const xs=v=>v===10?'X':sym(v);
+  const m0=a===undefined?'':xs(a);
+  const m1=b===undefined?'':a===10?xs(b):(a+b===10?'/':sym(b));
+  const m2=c===undefined?'':(a===10&&b!==10)?(b+c===10?'/':sym(c)):xs(c);
+  return[m0,m1,m2];
+}
+function sym(v){return v===undefined?'':v===0?'–':String(v)}
+function current(){
+  let best=-1,bn=11;
+  st.players.forEach((p,i)=>{const n=doneCount(p.rolls);if(n<10&&n<bn){bn=n;best=i}});
+  return best;
+}
+
+const list=document.getElementById('list'),keys=document.getElementById('keys'),who=document.getElementById('who');
+function render(){
+  const cur=current();
+  list.innerHTML='';
+  st.players.forEach((p,pi)=>{
+    const fr=frames(p.rolls),sc=scores(p.rolls),n=doneCount(p.rolls);
+    const el=document.createElement('div');el.className='player'+(pi===cur?' on':'');
+    let cells='';
+    for(let f=0;f<10;f++){
+      const m=marks(fr,f);
+      cells+=`<div class="f${pi===cur&&f===n?' cur':''}"><div class="fn">${f+1}</div><div class="rolls">${m.map(x=>`<span class="r${x==='X'||x==='/'?' x':''}">${x}</span>`).join('')}</div><div class="cum">${sc[f]??''}</div></div>`;
+    }
+    el.innerHTML=`<div class="prow"><input class="pname" id="pn${pi}" value="${p.name.replace(/"/g,'&quot;')}" placeholder="Doplň jméno (hráč ${pi+1})" aria-label="Jméno hráče"><span class="total">${sc.length?sc[sc.length-1]:0}</span>${st.players.length>1?`<button class="del" data-i="${pi}" aria-label="Odebrat hráče">×</button>`:''}</div><div class="sheet"><div class="frames">${cells}</div></div>`;
+    list.appendChild(el);
+  });
+  list.querySelectorAll('.pname').forEach((inp,i)=>inp.addEventListener('change',()=>{st.players[i].name=inp.value.trim();save();render()}));
+  list.querySelectorAll('.del').forEach(b=>b.addEventListener('click',()=>{
+    const i=+b.dataset.i;if(st.players[i].rolls.length&&!b.dataset.arm){b.dataset.arm=1;b.textContent='Smazat?';return}
+    st.players.splice(i,1);st.history=st.history.filter(h=>h!==i).map(h=>h>i?h-1:h);save();render()}));
+  const add=document.createElement('button');add.className='add';add.textContent='+ Přidat hráče';
+  add.onclick=()=>{st.players.push({name:'',rolls:[]});save();render()};
+  list.appendChild(add);
+  if(cur===-1){const d=document.createElement('div');d.className='done';
+    const best=Math.max(...st.players.map(p=>{const s=scores(p.rolls);return s[9]||0}));
+    d.textContent='Hra skončila. Vyhrává '+st.players.filter(p=>(scores(p.rolls)[9]||0)===best).map(p=>nm(p,st.players.indexOf(p))).join(', ')+' ('+best+')';list.prepend(d)}
+
+  // klávesnice
+  keys.innerHTML='';
+  const max=cur>=0?maxPins(st.players[cur].rolls):-1;
+  let isSecond=false;
+  if(cur>=0){const p=st.players[cur];const fr=frames(p.rolls);const r=fr[doneCount(p.rolls)]||[];
+    const n=doneCount(p.rolls);
+    isSecond=(n<9&&r.length===1)||(n===9&&((r.length===1&&r[0]!==10)||(r.length===2&&r[0]===10&&r[1]!==10)));
+    const f=n+1, hod=r.length+1;
+    who.innerHTML=`Hází <b>${nm(p,cur)}</b> · frame ${f} · ${hod}. hod`;
+  } else who.textContent='Konec hry';
+  for(let v=0;v<=10;v++){
+    const b=document.createElement('button');b.className='k';
+    const spare=isSecond&&v===max&&max<10;
+    b.textContent=v===10&&!isSecond?'X':spare?'/':v===0?'–':v;
+    if(v===max&&max>=0)b.classList.add('hot');
+    b.disabled=cur<0||v>max;
+    b.setAttribute('aria-label',v+' kuželek');
+    b.onclick=()=>{st.players[cur].rolls.push(v);st.history.push(cur);save();render()};
+    keys.appendChild(b);
+  }
+  const u=document.createElement('button');u.className='k undo';u.textContent='Zpět';
+  u.disabled=!st.history.length;
+  u.onclick=()=>{const i=st.history.pop();if(i!==undefined&&st.players[i])st.players[i].rolls.pop();save();render()};
+  keys.appendChild(u);
+}
+const bar=document.getElementById('confirmBar');
+document.getElementById('newBtn').onclick=()=>{bar.hidden=false};
+document.getElementById('noBtn').onclick=()=>{bar.hidden=true};
+document.getElementById('yesBtn').onclick=()=>{st.players.forEach(p=>p.rolls=[]);st.history=[];bar.hidden=true;save();render()};
+function stats(p){const fr=frames(p.rolls);let x=0,sp=0;for(let f=0;f<10;f++)marks(fr,f).forEach(m=>{if(m==='X')x++;else if(m==='/')sp++});const sc=scores(p.rolls);return{x,sp,score:sc.length?sc[sc.length-1]:0,done:doneCount(p.rolls)}}
+function ranking(){
+  const ps=st.players.map((p,i)=>({name:nm(p,i),...stats(p)})).filter(p=>p.done>0||st.players.length<=3);
+  ps.sort((a,b)=>b.score-a.score);
+  let pos=0,last=null;ps.forEach((p,i)=>{if(p.score!==last){pos=i+1;last=p.score}p.pos=pos});
+  return ps;
+}
+const ov=document.getElementById('ov');
+function esc(s){return s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function showRank(){
+  const r=ranking();const fin=current()===-1;
+  const xs=p=>`${p.x}× strike · ${p.sp}× spare`;
+  const top=[r[1],r[0],r[2]];const cls=['p2','p1','p3'];
+  let h=`<h2>${fin?'Konečné pořadí':'Průběžné pořadí'}</h2><div class="sub">${new Date().toLocaleDateString('cs-CZ',{day:'numeric',month:'long',year:'numeric'})}${fin?'':' · hra ještě běží'}</div>`;
+  h+=`<div class="podium">${top.map((p,i)=>p?`<div class="pc ${cls[i]}"><div class="n">${esc(p.name)}</div><div class="s">${p.score}</div><div class="xs" style="font-size:11px;color:var(--muted);text-align:center">${xs(p)}</div><div class="blk">${p.pos}</div></div>`:'<div></div>').join('')}</div>`;
+  if(r.length>3)h+=`<div class="rest">${r.slice(3).map(p=>`<div class="rr"><span class="pos">${p.pos}.</span><span class="nm">${esc(p.name)}</span><span class="xs">${p.x}X · ${p.sp}/</span><span class="sc">${p.score}</span></div>`).join('')}</div>`;
+  if(!r.length)h+='<div class="sub">Zatím nikdo nehodil.</div>';
+  h+=`<div class="ovb"><button class="small" id="cpBtn">Kopírovat výsledky</button><button class="small" id="clBtn">Zpět k zápisu</button></div><textarea id="cpTxt" hidden readonly style="width:100%;max-width:420px;height:160px;font:13px var(--body)"></textarea>`;
+  ov.innerHTML=h;ov.hidden=false;
+  const txt=(fin?'Konečné':'Průběžné')+' pořadí:\n'+r.map(p=>`${p.pos}. ${p.name} ${p.score} (${p.x}X, ${p.sp}/)`).join('\n');
+  document.getElementById('clBtn').onclick=()=>{ov.hidden=true};
+  document.getElementById('cpBtn').onclick=e=>{const b=e.currentTarget;const t=document.getElementById('cpTxt');
+    const fb=()=>{t.value=txt;t.hidden=false;t.select();b.textContent='Označeno, zkopírujte ručně'};
+    try{navigator.clipboard.writeText(txt).then(()=>{b.textContent='Zkopírováno'},fb)}catch(err){fb()}};
+}
+document.getElementById('rankBtn').onclick=showRank;
+render();
+try{navigator.wakeLock&&navigator.wakeLock.request('screen').catch(()=>{})}catch(e){}
+document.addEventListener('visibilitychange',()=>{try{if(document.visibilityState==='visible'&&navigator.wakeLock)navigator.wakeLock.request('screen').catch(()=>{})}catch(e){}});
+</script>
+</body>
+</html>
